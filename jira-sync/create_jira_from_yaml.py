@@ -2,7 +2,7 @@ import yaml
 import subprocess
 
 # Path to your YAML configuration file
-CONFIG_PATH = "~/Workspace/mock-offseason-tools/jira-sync/jira-sync-config.yml"
+CONFIG_PATH = "/home/erik/Workspace/mock-offseason-tools/jira-sync/jira-sync-config.yml"
 
 # --------------------------------------------
 # Run a shell command with optional output capture

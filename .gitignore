@@ -1,0 +1,36 @@
+# Byte-compiled / optimized / DLL files
+__pycache__/
+*.py[cod]
+*$py.class
+
+# Virtual environments (Micromamba, Conda, venv)
+.env/
+.venv/
+env/
+envs/
+micromamba/
+*.conda
+*.egg-info/
+
+# Jupyter Notebook checkpoints
+.ipynb_checkpoints/
+
+# VSCode / PyCharm / IDE settings
+.vscode/
+.idea/
+
+# OS-generated files
+.DS_Store
+Thumbs.db
+
+# Logs and local credentials
+*.log
+token.json
+credentials.json
+secrets.yaml
+
+# Node/JS dependencies (in case of frontend or Jira CLI scripting)
+node_modules/
+
+# Joplin sync exports
+.joplin-backups/

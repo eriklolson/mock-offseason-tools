@@ -1,0 +1,44 @@
+project_key: NBAOFF
+label: jira-sync
+
+teams:
+  - Hawks
+  - Celtics
+  - Nets
+  - Hornets
+  - Bulls
+  - Cavaliers
+  - Mavericks
+  - Nuggets
+  - Pistons
+  - Warriors
+  - Rockets
+  - Pacers
+  - Clippers
+  - Lakers
+  - Grizzlies
+  - Heat
+  - Bucks
+  - Timberwolves
+  - Pelicans
+  - Knicks
+  - Thunder
+  - Magic
+  - 76ers
+  - Suns
+  - Blazers
+  - Kings
+  - Spurs
+  - Raptors
+  - Jazz
+  - Wizards
+
+epics:
+  - summary: Authenticate with the Google Sheets API (using your Gmail).
+    description: Set up OAuth credentials and verify access to private Google Sheets.
+  - summary: Read each team’s cap sheet from a Google Sheet.
+    description: Use the Sheets API to extract structured data (e.g., payroll, cap info) per team.
+  - summary: Format the cap and salary data into Markdown.
+    description: Transform Google Sheets tabular data into markdown-formatted tables.
+  - summary: Write the Markdown into a corresponding Joplin note for that team.
+    description: Update or create Joplin notes using the Joplin API with markdown content per team.

@@ -1,9 +1,10 @@
 import re
 
 def parse_salary(s):
-    if isinstance(s, (int, float)):
-        return float(s)
-    return float(re.sub(r"[^\d.]", "", s))
+    return float(re.sub(r"[^\d.]", "", s.strip()))
+
+def parse_salary_list(salary_str):
+    return [parse_salary(s) for s in salary_str.split(",") if s.strip()]
 
 def lookup_team_name(abbr):
     teams = {
@@ -19,6 +20,20 @@ def lookup_team_name(abbr):
         "TOR": "Toronto Raptors", "UTA": "Utah Jazz", "WAS": "Washington Wizards"
     }
     return teams.get(abbr.upper(), f"[Unknown: {abbr.upper()}]")
+
+def absorb_with_tpe_or_space(salaries, absorber_pool):
+    absorbed = []
+    remaining = []
+    available = absorber_pool
+
+    for s in salaries:
+        if s <= available + 250_000:
+            absorbed.append(s)
+            available -= s  # absorbed into TPE/space
+        else:
+            remaining.append(s)
+
+    return absorbed, remaining, absorber_pool - available
 
 def evaluate_legality(team_name, outgoing, incoming):
     if outgoing <= 0:
@@ -65,16 +80,28 @@ if __name__ == "__main__":
     team_a = "Charlotte Hornets"
     team_b = lookup_team_name(team_b_abbr)
 
-    outgoing = input(f"Enter salary {team_a} is sending out: ")
-    incoming = input(f"Enter salary {team_a} is receiving from {team_b}: ")
+    print(f"\nEnter player salaries for each side as comma-separated values:")
+    charlotte_salaries = parse_salary_list(input(f"{team_a} is sending out: "))
+    other_team_salaries = parse_salary_list(input(f"{team_b} is sending out: "))
 
-    os = parse_salary(outgoing)
-    inc = parse_salary(incoming)
+    tpe_input = input("\nEnter TPE or Cap Space amount available to Charlotte (or leave blank): ").strip()
+    tpe_pool = parse_salary(tpe_input) if tpe_input else 0.0
+
+    absorbed, remaining, absorbed_total = absorb_with_tpe_or_space(other_team_salaries, tpe_pool)
+
+    print(f"\n💼 TPE / Cap Space Application")
+    print(f"Available: ${tpe_pool:,.2f}")
+    print(f"Absorbed Salaries: {[f'${s:,.2f}' for s in absorbed]}")
+    print(f"Remaining for Matching: {[f'${s:,.2f}' for s in remaining]}")
+    print(f"Total Absorbed: ${absorbed_total:,.2f}")
+
+    outgoing_total = sum(charlotte_salaries)
+    incoming_total = sum(remaining)
 
     print(f"\n🔁 Trade Summary: {team_a} ⇄ {team_b}")
-    print(f"{team_a} sends ${os:,.2f}, receives ${inc:,.2f}")
-    print(f"{team_b} sends ${inc:,.2f}, receives ${os:,.2f}")
+    print(f"{team_a} sends ${outgoing_total:,.2f}, receives ${sum(other_team_salaries):,.2f} total")
+    print(f"→ of which ${absorbed_total:,.2f} is absorbed via TPE/Cap Space")
+    print(f"{team_b} sends ${sum(other_team_salaries):,.2f}, receives ${outgoing_total:,.2f}")
 
-    # Evaluate for both teams
-    evaluate_legality(team_a, os, inc)
-    evaluate_legality(team_b, inc, os)
+    evaluate_legality(team_a, outgoing_total, incoming_total)
+    evaluate_legality(team_b, sum(other_team_salaries), outgoing_total)

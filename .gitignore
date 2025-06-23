@@ -4,8 +4,9 @@ __pycache__/
 *$py.class
 
 # Secrets
-# Specifically ignore dotfiles like .token.json, .credentials, etc.
-auth/.*
+# Ignore files (not dirs) inside auth/secrets/, but still allow subdirectories
+auth/secrets/*
+!auth/secrets/**/
 .env
 
 # Virtual environments (Micromamba, Conda, venv)

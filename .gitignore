@@ -3,10 +3,10 @@ __pycache__/
 *.py[cod]
 *$py.class
 
-# Secrets
-# Ignore files (not dirs) inside auth/secrets/, but still allow subdirectories
-auth/secrets/*
-!auth/secrets/**/
+# SECRETS
+# Ignore all files in all subdirectories, including hidden files
+auth/secrets/*/*
+auth/secrets/*/.* 
 .env
 
 # Virtual environments (Micromamba, Conda, venv)

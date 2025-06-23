@@ -4,6 +4,8 @@ __pycache__/
 *$py.class
 
 # Secrets
+# Specifically ignore dotfiles like .token.json, .credentials, etc.
+auth/.*
 .env
 
 # Virtual environments (Micromamba, Conda, venv)

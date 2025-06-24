@@ -1,199 +1,225 @@
 #!/usr/bin/env python3
 
 import os
-import yaml
 import requests
-from pathlib import Path
+import yaml
 from dotenv import load_dotenv
 from google.auth.transport.requests import Request
 from google.oauth2.credentials import Credentials
 from google_auth_oauthlib.flow import InstalledAppFlow
 from googleapiclient.discovery import build
 
-# ------------------------------------------------------------------------------
-# Load environment variables
-# ------------------------------------------------------------------------------
-
+# ───── Load environment variables ────────────────────────────────────────────────
 load_dotenv()
 
-BASE_DIR = Path(__file__).resolve().parent.parent
-TEAM_SHEETS_PATH = os.path.join(BASE_DIR, "config", "team_sheets.yaml")
+BASE_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 
-GOOGLE_CREDENTIALS = os.getenv("GOOGLE_CREDENTIALS", BASE_DIR / "auth/secrets/oauth/credentials.json")
-GOOGLE_TOKEN_PATH = os.getenv("GOOGLE_TOKEN_PATH", BASE_DIR / "auth/secrets/oauth/.token.json")
+CREDENTIALS_PATH = os.getenv("GOOGLE_CREDENTIALS", os.path.join(BASE_DIR, "auth/secrets/oauth/credentials.json"))
+TOKEN_PATH = os.getenv("GOOGLE_TOKEN_PATH", os.path.join(BASE_DIR, "auth/secrets/oauth/.token.json"))
+TEAM_SHEETS_CONFIG = os.getenv("TEAM_SHEETS_CONFIG", os.path.join(BASE_DIR, "config", "team_sheets.yaml"))
 
-# Joplin Web Clipper setup
 JOPLIN_API = os.getenv("JOPLIN_API", "http://127.0.0.1:41184")
-JOPLIN_NOTEBOOK_ID = "67e975d394dd43e9bde397740bbe821b"
-
-# ------------------------------------------------------------------------------
-# OAuth Scopes
-# ------------------------------------------------------------------------------
+JOPLIN_TOKEN = os.getenv("JOPLIN_TOKEN")
+JOPLIN_NOTEBOOK_ID = os.getenv("JOPLIN_NOTEBOOK_ID")
 
 SCOPES = [
     "https://www.googleapis.com/auth/spreadsheets",
     "https://www.googleapis.com/auth/drive.metadata.readonly",
 ]
 
-# ------------------------------------------------------------------------------
-# Cell background color → status marker mapping
-# ------------------------------------------------------------------------------
-
-COLOR_MARKER_MAP = {
-    "red": "CH",     # Cap Hold
-    "green": "PO",   # Player Option
-    "blue": "TO",    # Team Option
-    "orange": "10D", # 10 Day
-    "grey": "NG",    # Non-Guaranteed
-}
-
-# ------------------------------------------------------------------------------
-# Google Authentication
-# ------------------------------------------------------------------------------
-
+# ───── Google Sheets Auth ────────────────────────────────────────────────────────
 def authenticate():
     creds = None
-    if os.path.exists(GOOGLE_TOKEN_PATH):
-        creds = Credentials.from_authorized_user_file(GOOGLE_TOKEN_PATH, SCOPES)
+    if os.path.exists(TOKEN_PATH):
+        creds = Credentials.from_authorized_user_file(TOKEN_PATH, SCOPES)
     if not creds or not creds.valid:
         if creds and creds.expired and creds.refresh_token:
             creds.refresh(Request())
         else:
-            flow = InstalledAppFlow.from_client_secrets_file(GOOGLE_CREDENTIALS, SCOPES)
+            flow = InstalledAppFlow.from_client_secrets_file(CREDENTIALS_PATH, SCOPES)
             creds = flow.run_local_server(port=0)
-        with open(GOOGLE_TOKEN_PATH, "w") as token_file:
+        with open(TOKEN_PATH, "w") as token_file:
             token_file.write(creds.to_json())
     return creds
 
-# ------------------------------------------------------------------------------
-# Load team sheet URLs from YAML
-# ------------------------------------------------------------------------------
-
+# ───── Load config: team name → Google Sheet URL ────────────────────────────────
 def load_team_sheets():
-    with open(TEAM_SHEETS_PATH, "r") as f:
+    with open(TEAM_SHEETS_CONFIG, "r") as f:
         return yaml.safe_load(f)
 
-# ------------------------------------------------------------------------------
-# Convert normalized RGB (0–1) to simplified color labels
-# ------------------------------------------------------------------------------
-
-def rgb_to_label(color_dict):
-    if not color_dict:
-        return None
-
-    r = int(color_dict.get("red", 0) * 255)
-    g = int(color_dict.get("green", 0) * 255)
-    b = int(color_dict.get("blue", 0) * 255)
-
-    if r > 200 and g < 100 and b < 100:
-        return "red"
-    elif g > 200 and r < 100 and b < 100:
-        return "green"
-    elif b > 200 and r < 100 and g < 100:
-        return "blue"
-    elif r > 200 and g > 100:
-        return "orange"
-    elif r > 100 and g > 100 and b > 100:
-        return "grey"
-    else:
-        return None
-
-# ------------------------------------------------------------------------------
-# Get sheet data with formatting info
-# ------------------------------------------------------------------------------
-
+# ───── Get Sheet Data ────────────────────────────────────────────────────────────
 def get_sheet_data(service, sheet_id):
     result = service.spreadsheets().get(
         spreadsheetId=sheet_id,
+        ranges="Roster!C8:D25",
         includeGridData=True,
-        ranges="Roster",
-        fields="sheets.data.rowData.values(effectiveValue,effectiveFormat.backgroundColor)"
+        fields="sheets.data.rowData.values(effectiveValue,effectiveFormat.backgroundColor,formattedValue)"
     ).execute()
     return result["sheets"][0]["data"][0]["rowData"]
 
-# ------------------------------------------------------------------------------
-# Parse sheet rows → Markdown table
-# ------------------------------------------------------------------------------
+# ───── Infer cell status from fill color ─────────────────────────────────────────
+def get_status_marker(cell):
+    if "effectiveFormat" not in cell:
+        return ""
+    color = cell["effectiveFormat"].get("backgroundColor", {})
+    r, g, b = color.get("red", 1), color.get("green", 1), color.get("blue", 1)
 
-def parse_to_markdown(row_data):
-    table = []
-    header_row = []
-    for i, row in enumerate(row_data):
-        values = row.get("values", [])
-        row_cells = []
-        for cell in values:
-            val = cell.get("effectiveValue", {})
-            number = val.get("numberValue")
-            string = val.get("stringValue")
+    def rgb_match(r, g, b, target):
+        return abs(r - target[0]) < 0.1 and abs(g - target[1]) < 0.1 and abs(b - target[2]) < 0.1
 
-            bg = cell.get("effectiveFormat", {}).get("backgroundColor", {})
-            color = rgb_to_label(bg)
-            marker = COLOR_MARKER_MAP.get(color)
-
-            if number is not None:
-                salary = f"${int(number):,}"
-                cell_str = f"{marker} {salary}" if marker else salary
-            elif string is not None:
-                cell_str = string
-            else:
-                cell_str = ""
-
-            row_cells.append(cell_str)
-
-        if i == 0:
-            header_row = row_cells
-        else:
-            table.append(row_cells)
-
-    lines = []
-    lines.append("| " + " | ".join(header_row) + " |")
-    lines.append("|" + "|".join("---" for _ in header_row) + "|")
-    for row in table:
-        lines.append("| " + " | ".join(row) + " |")
-
-    return "\n".join(lines)
-
-# ------------------------------------------------------------------------------
-# Push Markdown content to Joplin
-# ------------------------------------------------------------------------------
-
-def sync_to_joplin(title, markdown):
-    # Check if note exists
-    res = requests.get(f"{JOPLIN_API}/notes", params={
-        "query": title,
-        "type": "note",
-        "notebook_id": JOPLIN_NOTEBOOK_ID
-    })
-    data = res.json().get("items", [])
-    if data:
-        note_id = data[0]["id"]
-        requests.put(f"{JOPLIN_API}/notes/{note_id}", json={
-            "title": title,
-            "body": markdown
-        })
+    if rgb_match(r, g, b, (1.0, 0.6, 0.6)):
+        return "CH"
+    elif rgb_match(r, g, b, (0.6, 0.8, 0.6)):
+        return "PO"
+    elif rgb_match(r, g, b, (0.6, 0.6, 0.8)):
+        return "TO"
+    elif rgb_match(r, g, b, (1.0, 0.8, 0.6)):
+        return "10D"
+    elif rgb_match(r, g, b, (0.85, 0.85, 0.85)):
+        return "NG"
     else:
-        requests.post(f"{JOPLIN_API}/notes", json={
-            "title": title,
-            "parent_id": JOPLIN_NOTEBOOK_ID,
-            "body": markdown
-        })
-    print(f"✅ Synced Joplin note for {title}")
+        return ""
 
-# ------------------------------------------------------------------------------
-# Main loop
-# ------------------------------------------------------------------------------
+# ───── Format Sheet Data to Markdown ─────────────────────────────────────────────
+def format_markdown(rows):
+    markdown = "| Player | Salary |\n|--------|--------|\n"
+    for row in rows:
+        cells = row.get("values", [])
+        if not cells:
+            continue
 
+        name = ""
+        salary_str = ""
+
+        if len(cells) > 0:
+            name = (
+                cells[0].get("effectiveValue", {}).get("stringValue") or
+                cells[0].get("formattedValue", "")
+            )
+
+        if len(cells) > 1:
+            salary_cell = cells[1]
+            val = salary_cell.get("effectiveValue", {}).get("numberValue")
+            salary_str = f"${val:,.0f}" if val is not None else salary_cell.get("formattedValue", "")
+            marker = get_status_marker(salary_cell)
+            if marker:
+                salary_str = f"{marker} {salary_str}"
+
+        if name:
+            markdown += f"| {name} | {salary_str} |\n"
+
+    return markdown
+
+# ───── Check Joplin API availability ─────────────────────────────────────────────
+def check_joplin_api_available():
+    try:
+        res = requests.get(f"{JOPLIN_API}/ping", timeout=3)
+        if res.status_code != 200:
+            raise Exception(f"Unexpected response code: {res.status_code}")
+    except Exception as e:
+        print(f"❌ Joplin API is not available: {e}")
+        exit(1)
+
+# ───── Ensure Notebook Exists ────────────────────────────────────────────────────
+def notebook_exists(notebook_id):
+    res = requests.get(f"{JOPLIN_API}/folders/{notebook_id}", params={"token": JOPLIN_TOKEN})
+    return res.status_code == 200
+
+# ───── Get Full Notebook Path ────────────────────────────────────────────────────
+def get_notebook_path(folder_id):
+    path_parts = []
+    current_id = folder_id
+
+    while current_id:
+        res = requests.get(f"{JOPLIN_API}/folders/{current_id}", params={"token": JOPLIN_TOKEN})
+        if res.status_code != 200:
+            break
+        data = res.json()
+        path_parts.insert(0, data.get("title", current_id))
+        current_id = data.get("parent_id")
+
+    return "/".join(path_parts)
+
+# ───── Sync note to Joplin ───────────────────────────────────────────────────────
+def sync_note_to_joplin(title, markdown):
+    if not JOPLIN_NOTEBOOK_ID:
+        print(f"❌ Cannot create note '{title}' – JOPLIN_NOTEBOOK_ID is missing.")
+        return
+    if not notebook_exists(JOPLIN_NOTEBOOK_ID):
+        print(f"❌ Notebook with ID '{JOPLIN_NOTEBOOK_ID}' not found.")
+        return
+
+    res = requests.get(f"{JOPLIN_API}/folders/{JOPLIN_NOTEBOOK_ID}/notes", params={
+        "token": JOPLIN_TOKEN
+    })
+    items = [note for note in res.json().get("items", []) if note["title"] == title]
+
+    if items:
+        note = items[0]
+        note_id = note["id"]
+        parent_id = note.get("parent_id", JOPLIN_NOTEBOOK_ID)
+        notebook_path = get_notebook_path(parent_id)
+        print(f"✏️  Updating existing note in {notebook_path}/{title}")
+        print(f"    (Notebook ID: {parent_id}, Note ID: {note_id})")
+
+        res = requests.put(
+            f"{JOPLIN_API}/notes/{note_id}",
+            params={"token": JOPLIN_TOKEN},
+            json={"body": markdown}
+        )
+
+        if res.status_code != 200:
+            print(f"⚠️ Failed to update note '{title}': {res.status_code} {res.text}")
+            return
+    else:
+        res = requests.post(
+            f"{JOPLIN_API}/notes",
+            params={"token": JOPLIN_TOKEN},
+            json={
+                "title": title,
+                "body": markdown,
+                "parent_id": JOPLIN_NOTEBOOK_ID
+            }
+        )
+
+        if res.status_code != 200:
+            print(f"❌ Failed to create note '{title}': {res.status_code} {res.text}")
+            return
+
+        note_id = res.json().get("id")
+        if not note_id:
+            print(f"❌ No note ID returned when creating '{title}'")
+            return
+
+        notebook_path = get_notebook_path(JOPLIN_NOTEBOOK_ID)
+        print(f"🆕 Creating note in {notebook_path}/{title}")
+        print(f"    (Notebook ID: {JOPLIN_NOTEBOOK_ID}, Note ID: {note_id})")
+
+    note_url = f"joplin://x-callback-url/openNote?id={note_id}"
+    print(f"✅ Synced Joplin note for {title} → {note_url}")
+
+# ───── Main ──────────────────────────────────────────────────────────────────────
 def main():
+    check_joplin_api_available()
+
+    if not JOPLIN_NOTEBOOK_ID:
+        raise ValueError("❌ JOPLIN_NOTEBOOK_ID is not set. Please check your .env file.")
+    if not notebook_exists(JOPLIN_NOTEBOOK_ID):
+        raise ValueError(f"❌ Joplin notebook ID '{JOPLIN_NOTEBOOK_ID}' is invalid or inaccessible.")
+
     creds = authenticate()
     service = build("sheets", "v4", credentials=creds)
-    teams = load_team_sheets()
 
-    for team_name, sheet_url in teams.items():
-        print(f"📥 Fetching: {team_name}")
-        sheet_id = sheet_url.split("/d/")[1].split("/")[0]
-        row_data = get_sheet_data(service, sheet_id)
-        md = parse_to_markdown(row_data)
-        sync_to_joplin(team_name, md)
+    teams = load_team_sheets()
+    for team, url in teams.items():
+        print(f"📥 Fetching: {team}")
+        sheet_id = url.split("/d/")[1].split("/")[0]
+        try:
+            row_data = get_sheet_data(service, sheet_id)
+            markdown = format_markdown(row_data)
+            sync_note_to_joplin(team, markdown)
+        except Exception as e:
+            print(f"❌ Failed to sync {team}: {e}")
 
 if __name__ == "__main__":
     main()

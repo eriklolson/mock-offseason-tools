@@ -9,7 +9,8 @@ from google.oauth2.credentials import Credentials
 from google_auth_oauthlib.flow import InstalledAppFlow
 from googleapiclient.discovery import build
 
-# ───── Load environment variables ────────────────────────────────────────────────
+
+# Load environment variables
 load_dotenv()
 
 BASE_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
@@ -27,7 +28,6 @@ SCOPES = [
     "https://www.googleapis.com/auth/drive.metadata.readonly",
 ]
 
-# ───── Google Sheets Auth ────────────────────────────────────────────────────────
 def authenticate():
     creds = None
     if os.path.exists(TOKEN_PATH):
@@ -42,22 +42,19 @@ def authenticate():
             token_file.write(creds.to_json())
     return creds
 
-# ───── Load config: team name → Google Sheet URL ────────────────────────────────
 def load_team_sheets():
     with open(TEAM_SHEETS_CONFIG, "r") as f:
         return yaml.safe_load(f)
 
-# ───── Get Sheet Data ────────────────────────────────────────────────────────────
 def get_sheet_data(service, sheet_id):
     result = service.spreadsheets().get(
         spreadsheetId=sheet_id,
-        ranges="Roster!C8:D25",
+        ranges=["Roster!C8:D25", "Roster!Q6:Q10"],
         includeGridData=True,
         fields="sheets.data.rowData.values(effectiveValue,effectiveFormat.backgroundColor,formattedValue)"
     ).execute()
-    return result["sheets"][0]["data"][0]["rowData"]
+    return result["sheets"]
 
-# ───── Infer cell status from fill color ─────────────────────────────────────────
 def get_status_marker(cell):
     if "effectiveFormat" not in cell:
         return ""
@@ -80,23 +77,39 @@ def get_status_marker(cell):
     else:
         return ""
 
-# ───── Format Sheet Data to Markdown ─────────────────────────────────────────────
+def format_summary(rows):
+    labels = [
+        "Salary for Cap",
+        "Cap Space",
+        "Luxury Tax Space",
+        "1st Apron Space",
+        "2nd Apron Space"
+    ]
+
+    markdown = "### 🧾 Cap Sheet Summary\n\n"
+    markdown += "| Category | Amount |\n|----------|--------|\n"
+
+    for i, row in enumerate(rows):
+        cells = row.get("values", [])
+        amount = cells[0].get("formattedValue", "").strip() if cells else ""
+        if not amount:
+            val = cells[0].get("effectiveValue", {}) if cells else {}
+            if "numberValue" in val:
+                amount = f"${val['numberValue']:,.0f}"
+        if amount:
+            markdown += f"| {labels[i]} | {amount} |\n"
+
+    return markdown
+
 def format_markdown(rows):
-    markdown = "| Player | Salary |\n|--------|--------|\n"
+    markdown = "### 👥 Player Salaries\n\n"
+    markdown += "| Player | Salary |\n|--------|--------|\n"
     for row in rows:
         cells = row.get("values", [])
         if not cells:
             continue
-
-        name = ""
+        name = cells[0].get("effectiveValue", {}).get("stringValue") or cells[0].get("formattedValue", "")
         salary_str = ""
-
-        if len(cells) > 0:
-            name = (
-                cells[0].get("effectiveValue", {}).get("stringValue") or
-                cells[0].get("formattedValue", "")
-            )
-
         if len(cells) > 1:
             salary_cell = cells[1]
             val = salary_cell.get("effectiveValue", {}).get("numberValue")
@@ -104,13 +117,10 @@ def format_markdown(rows):
             marker = get_status_marker(salary_cell)
             if marker:
                 salary_str = f"{marker} {salary_str}"
-
         if name:
             markdown += f"| {name} | {salary_str} |\n"
-
     return markdown
 
-# ───── Check Joplin API availability ─────────────────────────────────────────────
 def check_joplin_api_available():
     try:
         res = requests.get(f"{JOPLIN_API}/ping", timeout=3)
@@ -120,16 +130,9 @@ def check_joplin_api_available():
         print(f"❌ Joplin API is not available: {e}")
         exit(1)
 
-# ───── Ensure Notebook Exists ────────────────────────────────────────────────────
-def notebook_exists(notebook_id):
-    res = requests.get(f"{JOPLIN_API}/folders/{notebook_id}", params={"token": JOPLIN_TOKEN})
-    return res.status_code == 200
-
-# ───── Get Full Notebook Path ────────────────────────────────────────────────────
 def get_notebook_path(folder_id):
     path_parts = []
     current_id = folder_id
-
     while current_id:
         res = requests.get(f"{JOPLIN_API}/folders/{current_id}", params={"token": JOPLIN_TOKEN})
         if res.status_code != 200:
@@ -137,10 +140,12 @@ def get_notebook_path(folder_id):
         data = res.json()
         path_parts.insert(0, data.get("title", current_id))
         current_id = data.get("parent_id")
-
     return "/".join(path_parts)
 
-# ───── Sync note to Joplin ───────────────────────────────────────────────────────
+def notebook_exists(notebook_id):
+    res = requests.get(f"{JOPLIN_API}/folders/{notebook_id}", params={"token": JOPLIN_TOKEN})
+    return res.status_code == 200
+
 def sync_note_to_joplin(title, markdown):
     if not JOPLIN_NOTEBOOK_ID:
         print(f"❌ Cannot create note '{title}' – JOPLIN_NOTEBOOK_ID is missing.")
@@ -149,9 +154,7 @@ def sync_note_to_joplin(title, markdown):
         print(f"❌ Notebook with ID '{JOPLIN_NOTEBOOK_ID}' not found.")
         return
 
-    res = requests.get(f"{JOPLIN_API}/folders/{JOPLIN_NOTEBOOK_ID}/notes", params={
-        "token": JOPLIN_TOKEN
-    })
+    res = requests.get(f"{JOPLIN_API}/folders/{JOPLIN_NOTEBOOK_ID}/notes", params={"token": JOPLIN_TOKEN})
     items = [note for note in res.json().get("items", []) if note["title"] == title]
 
     if items:
@@ -161,16 +164,11 @@ def sync_note_to_joplin(title, markdown):
         notebook_path = get_notebook_path(parent_id)
         print(f"✏️  Updating existing note in {notebook_path}/{title}")
         print(f"    (Notebook ID: {parent_id}, Note ID: {note_id})")
-
-        res = requests.put(
+        requests.put(
             f"{JOPLIN_API}/notes/{note_id}",
             params={"token": JOPLIN_TOKEN},
             json={"body": markdown}
         )
-
-        if res.status_code != 200:
-            print(f"⚠️ Failed to update note '{title}': {res.status_code} {res.text}")
-            return
     else:
         res = requests.post(
             f"{JOPLIN_API}/notes",
@@ -181,16 +179,10 @@ def sync_note_to_joplin(title, markdown):
                 "parent_id": JOPLIN_NOTEBOOK_ID
             }
         )
-
         if res.status_code != 200:
             print(f"❌ Failed to create note '{title}': {res.status_code} {res.text}")
             return
-
         note_id = res.json().get("id")
-        if not note_id:
-            print(f"❌ No note ID returned when creating '{title}'")
-            return
-
         notebook_path = get_notebook_path(JOPLIN_NOTEBOOK_ID)
         print(f"🆕 Creating note in {notebook_path}/{title}")
         print(f"    (Notebook ID: {JOPLIN_NOTEBOOK_ID}, Note ID: {note_id})")
@@ -198,7 +190,6 @@ def sync_note_to_joplin(title, markdown):
     note_url = f"joplin://x-callback-url/openNote?id={note_id}"
     print(f"✅ Synced Joplin note for {title} → {note_url}")
 
-# ───── Main ──────────────────────────────────────────────────────────────────────
 def main():
     check_joplin_api_available()
 
@@ -215,9 +206,25 @@ def main():
         print(f"📥 Fetching: {team}")
         sheet_id = url.split("/d/")[1].split("/")[0]
         try:
-            row_data = get_sheet_data(service, sheet_id)
-            markdown = format_markdown(row_data)
+            sheet_data = get_sheet_data(service, sheet_id)
+
+            row_data_players = []
+            row_data_summary = []
+
+            if len(sheet_data) > 0 and "data" in sheet_data[0] and len(sheet_data[0]["data"]) > 0:
+                row_data_players = sheet_data[0]["data"][0].get("rowData", [])
+
+            if len(sheet_data) > 1 and "data" in sheet_data[1] and len(sheet_data[1]["data"]) > 0:
+                row_data_summary = sheet_data[1]["data"][0].get("rowData", [])
+
+            if not row_data_players or not row_data_summary:
+                print(f"🚫 Skipping {team} due to missing sheet data")
+                continue
+
+            markdown = format_summary(row_data_summary)
+            markdown += "\n\n" + format_markdown(row_data_players)
             sync_note_to_joplin(team, markdown)
+
         except Exception as e:
             print(f"❌ Failed to sync {team}: {e}")
 

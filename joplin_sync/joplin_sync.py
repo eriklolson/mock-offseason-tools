@@ -10,7 +10,7 @@ from google.oauth2.credentials import Credentials
 from google_auth_oauthlib.flow import InstalledAppFlow
 from googleapiclient.discovery import build
 
-from team_markdown_builder import build_team_summary
+from utils.team_markdown_builder import build_team_summary
 
 # Load environment variables
 load_dotenv()
@@ -19,7 +19,7 @@ BASE_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 
 CREDENTIALS_PATH = os.getenv("GOOGLE_CREDENTIALS", os.path.join(BASE_DIR, "auth/secrets/oauth/credentials.json"))
 TOKEN_PATH = os.getenv("GOOGLE_TOKEN_PATH", os.path.join(BASE_DIR, "auth/secrets/oauth/.token.json"))
-TEAM_SHEETS_CONFIG = os.getenv("TEAM_SHEETS_CONFIG", os.path.join(BASE_DIR, "config", "team_sheets.yaml"))
+TEAM_SHEETS_CONFIG = os.getenv("TEAM_SHEETS_CONFIG", os.path.join(BASE_DIR, "config", "teamsheets.yaml"))
 
 JOPLIN_API = os.getenv("JOPLIN_API", "http://127.0.0.1:41184")
 JOPLIN_TOKEN = os.getenv("JOPLIN_TOKEN")

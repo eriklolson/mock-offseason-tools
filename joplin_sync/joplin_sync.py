@@ -4,11 +4,13 @@ import os
 import requests
 import yaml
 from dotenv import load_dotenv
+import gspread
 from google.auth.transport.requests import Request
 from google.oauth2.credentials import Credentials
 from google_auth_oauthlib.flow import InstalledAppFlow
 from googleapiclient.discovery import build
 
+from team_markdown_builder import build_team_summary
 
 # Load environment variables
 load_dotenv()
@@ -28,6 +30,7 @@ SCOPES = [
     "https://www.googleapis.com/auth/drive.metadata.readonly",
 ]
 
+
 def authenticate():
     creds = None
     if os.path.exists(TOKEN_PATH):
@@ -42,9 +45,11 @@ def authenticate():
             token_file.write(creds.to_json())
     return creds
 
+
 def load_team_sheets():
     with open(TEAM_SHEETS_CONFIG, "r") as f:
         return yaml.safe_load(f)
+
 
 def get_sheet_data(service, sheet_id):
     result = service.spreadsheets().get(
@@ -54,6 +59,7 @@ def get_sheet_data(service, sheet_id):
         fields="sheets.data.rowData.values(effectiveValue,effectiveFormat.backgroundColor,formattedValue)"
     ).execute()
     return result["sheets"]
+
 
 def get_status_marker(cell):
     if "effectiveFormat" not in cell:
@@ -76,6 +82,7 @@ def get_status_marker(cell):
         return "NG"
     else:
         return ""
+
 
 def format_summary(rows):
     labels = [
@@ -101,6 +108,7 @@ def format_summary(rows):
 
     return markdown
 
+
 def format_markdown(rows):
     markdown = "### 👥 Player Salaries\n\n"
     markdown += "| Player | Salary |\n|--------|--------|\n"
@@ -121,6 +129,7 @@ def format_markdown(rows):
             markdown += f"| {name} | {salary_str} |\n"
     return markdown
 
+
 def check_joplin_api_available():
     try:
         res = requests.get(f"{JOPLIN_API}/ping", timeout=3)
@@ -129,6 +138,7 @@ def check_joplin_api_available():
     except Exception as e:
         print(f"❌ Joplin API is not available: {e}")
         exit(1)
+
 
 def get_notebook_path(folder_id):
     path_parts = []
@@ -142,9 +152,11 @@ def get_notebook_path(folder_id):
         current_id = data.get("parent_id")
     return "/".join(path_parts)
 
+
 def notebook_exists(notebook_id):
     res = requests.get(f"{JOPLIN_API}/folders/{notebook_id}", params={"token": JOPLIN_TOKEN})
     return res.status_code == 200
+
 
 def sync_note_to_joplin(title, markdown):
     if not JOPLIN_NOTEBOOK_ID:
@@ -190,6 +202,7 @@ def sync_note_to_joplin(title, markdown):
     note_url = f"joplin://x-callback-url/openNote?id={note_id}"
     print(f"✅ Synced Joplin note for {title} → {note_url}")
 
+
 def main():
     check_joplin_api_available()
 
@@ -200,6 +213,7 @@ def main():
 
     creds = authenticate()
     service = build("sheets", "v4", credentials=creds)
+    gc = gspread.authorize(creds)
 
     teams = load_team_sheets()
     for team, url in teams.items():
@@ -221,12 +235,19 @@ def main():
                 print(f"🚫 Skipping {team} due to missing sheet data")
                 continue
 
-            markdown = format_summary(row_data_summary)
+            # Get worksheet for full-team markdown
+            spreadsheet = gc.open_by_key(sheet_id)
+            sheet = spreadsheet.worksheet("Roster")
+
+            markdown = build_team_summary(sheet)
+            markdown += "\n\n" + format_summary(row_data_summary)
             markdown += "\n\n" + format_markdown(row_data_players)
+
             sync_note_to_joplin(team, markdown)
 
         except Exception as e:
             print(f"❌ Failed to sync {team}: {e}")
+
 
 if __name__ == "__main__":
     main()

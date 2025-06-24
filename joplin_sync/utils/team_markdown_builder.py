@@ -8,40 +8,50 @@ def format_dollar(amount):
     except (ValueError, TypeError):
         return amount or ""
 
-def build_team_summary(sheet):
-    # Basic Cap Overview
-    salary_for_cap     = format_dollar(sheet.acell('Q6').value)
-    cap_space          = format_dollar(sheet.acell('Q7').value)
-    first_apron_space  = format_dollar(sheet.acell('Q8').value)
-    second_apron_space = format_dollar(sheet.acell('Q9').value)
+def safe_get(sheet, cell_ref):
+    try:
+        return sheet.acell(cell_ref).value or ""
+    except Exception:
+        return ""
 
-    # Exceptions Table
+def build_team_summary(sheet):
+    # Safely extract cap numbers
+    salary_for_cap     = format_dollar(safe_get(sheet, 'C4'))
+    cap_space          = format_dollar(safe_get(sheet, 'C5'))
+    first_apron_space  = format_dollar(safe_get(sheet, 'C6'))
+    second_apron_space = format_dollar(safe_get(sheet, 'C7'))
+
+    # Safely extract exception info
     exceptions = {
         "Cap Room Exception": {
-            "available": sheet.acell('R13').value,
-            "amount": format_dollar(sheet.acell('T13').value),
+            "available": safe_get(sheet, 'B10'),
+            "amount": format_dollar(safe_get(sheet, 'C10')),
             "trigger": "No"
         },
         "Bi-Annual Exception (BAE)": {
-            "available": sheet.acell('R14').value,
-            "amount": format_dollar(sheet.acell('T14').value),
+            "available": safe_get(sheet, 'B11'),
+            "amount": format_dollar(safe_get(sheet, 'C11')),
             "trigger": "At 1st Apron"
         },
         "Taxpayer MLE": {
-            "available": sheet.acell('R15').value,
-            "amount": format_dollar(sheet.acell('T15').value),
+            "available": safe_get(sheet, 'B12'),
+            "amount": format_dollar(safe_get(sheet, 'C12')),
             "trigger": "At 2nd Apron"
         },
         "Full MLE": {
-            "available": sheet.acell('R16').value,
-            "amount": format_dollar(sheet.acell('T16').value),
+            "available": safe_get(sheet, 'B13'),
+            "amount": format_dollar(safe_get(sheet, 'C13')),
             "trigger": "At 1st Apron"
         },
     }
 
-    # TPE Extraction
-    tpe_players_range = sheet.range("S21:S31")
-    tpe_amounts_range = sheet.range("U21:U31")
+    # Extract up to 10 TPEs (skip blanks)
+    try:
+        tpe_players_range = sheet.range("B20:B29")
+        tpe_amounts_range = sheet.range("C20:C29")
+    except Exception:
+        tpe_players_range = []
+        tpe_amounts_range = []
 
     tpes = []
     for player_cell, amount_cell in zip(tpe_players_range, tpe_amounts_range):
@@ -50,7 +60,7 @@ def build_team_summary(sheet):
         if player:
             tpes.append({"player": player, "amount": amount})
 
-    # Cap Summary Table
+    # Markdown: Cap Summary
     cap_summary_md = f"""\
 |     |     |
 | --- | --- |
@@ -60,7 +70,7 @@ def build_team_summary(sheet):
 | **2nd Apron Space** | {second_apron_space} |
 """
 
-    # Exception Table
+    # Markdown: Exceptions
     exceptions_md = """\
 |     |     |     |     |
 | --- | --- | --- | --- |
@@ -70,7 +80,7 @@ def build_team_summary(sheet):
         for label, data in exceptions.items()
     )
 
-    # TPE Table
+    # Markdown: TPEs
     tpe_md = """\
 |     |     |
 | --- | --- |

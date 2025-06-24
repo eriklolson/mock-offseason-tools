@@ -31,10 +31,10 @@ CREDENTIALS_PATH = os.getenv("GOOGLE_CREDENTIALS", os.path.join(BASE_DIR, "auth/
 TOKEN_PATH = os.getenv("GOOGLE_TOKEN_PATH", os.path.join(BASE_DIR, "auth/secrets/oauth/.token.json"))
 
 # ------------------------------------------------------------------------------
-# Output YAML path: will write config/team_sheets.yaml
+# Output YAML path: will write config/teamsheets.yaml
 # ------------------------------------------------------------------------------
 
-CONFIG_PATH = os.getenv("TEAM_SHEETS_YAML", os.path.join(BASE_DIR, "config", "team_sheets.yaml"))
+CONFIG_PATH = os.getenv("teamsheets.yaml", os.path.join(BASE_DIR, "config", "teamsheets.yaml"))
 
 # ------------------------------------------------------------------------------
 # Google Drive folder ID of the shared folder: "2025 TeamSheets"
@@ -105,7 +105,7 @@ def write_yaml(data, path=CONFIG_PATH):
     os.makedirs(os.path.dirname(path), exist_ok=True)
     with open(path, "w") as f:
         yaml.dump(data, f, default_flow_style=False)
-    print(f"✅ team_sheets.yaml written to {path} with {len(data)} teams.")
+    print(f"✅ teamsheets.yaml written to {path} with {len(data)} teams.")
 
 # ------------------------------------------------------------------------------
 # Main logic: authenticate, fetch sheet links, write YAML config

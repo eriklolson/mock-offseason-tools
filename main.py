@@ -1,49 +1,31 @@
-# Scaffold
+#!/usr/bin/env python3
 
-# #!/usr/bin/env python3
-# import importlib
-# import sys
+import sys
+import os
+import argparse
+import runpy
 
-# AVAILABLE_MODULES = {
-#     "chatgpt_sync": "chatgpt_sync.main",
-#     "jira_sync": "jira_sync.main",
-# }
+# --- Resolve project root and fix sys.path + cwd ---
+PROJECT_ROOT = os.path.dirname(os.path.abspath(__file__))
+sys.path.insert(0, PROJECT_ROOT)
+os.chdir(PROJECT_ROOT)  # Force working directory to project root
 
-# def list_modules():
-#     print("Available modules:")
-#     for i, key in enumerate(AVAILABLE_MODULES, start=1):
-#         print(f"[{i}] {key}")
+def run_module(module_path):
+    try:
+        runpy.run_module(module_path, run_name="__main__")
+    except ModuleNotFoundError as e:
+        print(f"❌ Module '{module_path}' not found.\n{e}")
+    except Exception as e:
+        print(f"❌ Error running module '{module_path}':\n{e}")
 
-# def choose_interactively():
-#     list_modules()
-#     choice = input("Select a module to run: ").strip()
-#     try:
-#         index = int(choice) - 1
-#         module_key = list(AVAILABLE_MODULES.keys())[index]
-#     except (ValueError, IndexError):
-#         print("❌ Invalid selection.")
-#         sys.exit(1)
-#     return module_key
+def main():
+    parser = argparse.ArgumentParser(description="Run project module")
+    parser.add_argument("-m", "--module", help="Module path to run", required=True)
+    args, unknown = parser.parse_known_args()
 
-# def run_module(name):
-#     module_path = AVAILABLE_MODULES.get(name)
-#     if not module_path:
-#         print(f"❌ Unknown module: {name}")
-#         list_modules()
-#         sys.exit(1)
-#     try:
-#         mod = importlib.import_module(module_path)
-#         if hasattr(mod, "main"):
-#             mod.main()
-#         else:
-#             print(f"❌ Module '{name}' does not have a main() function.")
-#     except Exception as e:
-#         print(f"❌ Failed to run module '{name}': {e}")
-#         raise
+    # Simulate command-line args for the module being run
+    sys.argv = [args.module] + unknown
+    run_module(args.module)
 
-# if __name__ == "__main__":
-#     if len(sys.argv) > 1:
-#         selected = sys.argv[1]
-#     else:
-#         selected = choose_interactively()
-#     run_module(selected)
+if __name__ == "__main__":
+    main()

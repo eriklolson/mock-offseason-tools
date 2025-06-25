@@ -13,7 +13,7 @@ from googleapiclient.discovery import build
 from config.google_config import GOOGLE_TOKEN, GOOGLE_CREDENTIALS, SCOPES
 from config.joplin_config import BASE_DIR, JOPLIN_API, JOPLIN_TOKEN, JOPLIN_NOTEBOOK_ID
 from config.sheets_config import TEAM_SHEETS_CONFIG
-from utils.team_markdown_builder import build_team_summary
+from joplin.utils.team_markdown_builder import build_team_summary
 
 def authenticate():
     creds = None

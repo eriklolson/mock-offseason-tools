@@ -1,5 +1,7 @@
 #!/usr/bin/env python3
 import os
+import sys
+sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), "..")))
 import requests
 import yaml
 import gspread
@@ -8,22 +10,22 @@ from google.oauth2.credentials import Credentials
 from google_auth_oauthlib.flow import InstalledAppFlow
 from googleapiclient.discovery import build
 
-from config.google_config import CREDENTIALS_PATH, TOKEN_PATH, SCOPES
+from config.google_config import GOOGLE_TOKEN, GOOGLE_CREDENTIALS, SCOPES
 from config.joplin_config import BASE_DIR, JOPLIN_API, JOPLIN_TOKEN, JOPLIN_NOTEBOOK_ID
 from config.sheets_config import TEAM_SHEETS_CONFIG
 from utils.team_markdown_builder import build_team_summary
 
 def authenticate():
     creds = None
-    if os.path.exists(TOKEN_PATH):
-        creds = Credentials.from_authorized_user_file(TOKEN_PATH, SCOPES)
+    if os.path.exists(GOOGLE_TOKEN):
+        creds = Credentials.from_authorized_user_file(GOOGLE_TOKEN, SCOPES)
     if not creds or not creds.valid:
         if creds and creds.expired and creds.refresh_token:
             creds.refresh(Request())
         else:
-            flow = InstalledAppFlow.from_client_secrets_file(CREDENTIALS_PATH, SCOPES)
+            flow = InstalledAppFlow.from_client_secrets_file(GOOGLE_CREDENTIALS, SCOPES)
             creds = flow.run_local_server(port=0)
-        with open(TOKEN_PATH, "w") as token_file:
+        with open(GOOGLE_TOKEN, "w") as token_file:
             token_file.write(creds.to_json())
     return creds
 

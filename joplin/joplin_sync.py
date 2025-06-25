@@ -1,5 +1,6 @@
 #!/usr/bin/env python3
 import os
+import sys
 import requests
 import yaml
 import gspread
@@ -8,15 +9,8 @@ from google.oauth2.credentials import Credentials
 from google_auth_oauthlib.flow import InstalledAppFlow
 from googleapiclient.discovery import build
 
-import os
-import sys
-from dotenv import load_dotenv
+from config.base import BASE_DIR
 
-# Load .env variables into the environment
-load_dotenv()
-
-# Resolve base directory relative to project structure
-BASE_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 
 # ==== Joplin Config ====
 JOPLIN_API = os.getenv("JOPLIN_API", "http://127.0.0.1:41184")

@@ -1,0 +1,8 @@
+epics:
+  - name: sync sheets to joplin
+    summary: test
+    description:
+
+  - name: sync joplin to chatgpt
+    summary: test
+    description: test

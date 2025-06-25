@@ -9,35 +9,37 @@ from google.oauth2.credentials import Credentials
 from google_auth_oauthlib.flow import InstalledAppFlow
 from googleapiclient.discovery import build
 
-from config.base import BASE_DIR
+from config.google_config import CREDENTIALS_PATH, TOKEN_PATH, SCOPES, TEAM_SHEETS_CONFIG
+
+from config.joplin_config import BASE_DIR, JOPLIN_API, JOPLIN_TOKEN, JOPLIN_NOTEBOOK_ID
 
 
 # ==== Joplin Config ====
-JOPLIN_API = os.getenv("JOPLIN_API", "http://127.0.0.1:41184")
-JOPLIN_TOKEN = os.getenv("JOPLIN_TOKEN")
-JOPLIN_NOTEBOOK_ID = os.getenv("JOPLIN_NOTEBOOK_ID")
+# JOPLIN_API = os.getenv("JOPLIN_API", "http://127.0.0.1:41184")
+# JOPLIN_TOKEN = os.getenv("JOPLIN_TOKEN")
+# JOPLIN_NOTEBOOK_ID = os.getenv("JOPLIN_NOTEBOOK_ID")
 
-# ==== Google Sheets Auth Config ====
-CREDENTIALS_PATH = os.getenv(
-    "GOOGLE_CREDENTIALS",
-    os.path.join(BASE_DIR, "auth/secrets/oauth/credentials.json")
-)
-
-TOKEN_PATH = os.getenv(
-    "GOOGLE_TOKEN_PATH",
-    os.path.join(BASE_DIR, "auth/secrets/oauth/.token.json")
-)
-
-SCOPES = [
-    "https://www.googleapis.com/auth/spreadsheets",
-    "https://www.googleapis.com/auth/drive.metadata.readonly",
-]
-
-# ==== Team Sheet Config ====
-TEAM_SHEETS_CONFIG = os.getenv(
-    "TEAM_SHEETS_CONFIG",
-    os.path.join(BASE_DIR, "config", "teamsheets.yaml")
-)
+# # ==== Google Sheets Auth Config ====
+# CREDENTIALS_PATH = os.getenv(
+#     "GOOGLE_CREDENTIALS",
+#     os.path.join(BASE_DIR, "auth/secrets/oauth/credentials.json")
+# )
+#
+# TOKEN_PATH = os.getenv(
+#     "GOOGLE_TOKEN_PATH",
+#     os.path.join(BASE_DIR, "auth/secrets/oauth/.token.json")
+# )
+#
+# SCOPES = [
+#     "https://www.googleapis.com/auth/spreadsheets",
+#     "https://www.googleapis.com/auth/drive.metadata.readonly",
+# ]
+#
+# # ==== Team Sheet Config ====
+# TEAM_SHEETS_CONFIG = os.getenv(
+#     "TEAM_SHEETS_CONFIG",
+#     os.path.join(BASE_DIR, "config", "teamsheets.yaml")
+# )
 from utils.team_markdown_builder import build_team_summary
 # Load environment variables
 

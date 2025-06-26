@@ -1,0 +1,11 @@
+epics:
+  - epic: MOT-3
+    issues:
+      - ISSUE-1
+      - ISSUE-2
+
+  - epic: EPIC-102
+    issues:
+      - ISSUE-3
+      - ISSUE-4
+      - ISSUE-5

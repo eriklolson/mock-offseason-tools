@@ -1,0 +1,20 @@
+cap_variables:
+  salary_for_cap: Q6
+  cap_space: Q7
+  luxury_tax_space: C8
+  apron1_space: Q9
+  apron2_space: Q10
+
+
+exceptions:
+  room_exception_rem: C10
+  bae_exception_rem: C11
+  tp_mle_rem: C12
+  full_mle_rem: C13
+
+
+payroll:
+  player_name: C8:C27
+  player_sal_26: D8:D27
+  player_sal_27: H8:H27
+

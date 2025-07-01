@@ -1,19 +1,23 @@
 #!/usr/bin/env python3
 import os
 import sys
-sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), "..")))
 import requests
 import yaml
 import gspread
+from pathlib import Path
 from google.auth.transport.requests import Request
 from google.oauth2.credentials import Credentials
 from google_auth_oauthlib.flow import InstalledAppFlow
 from googleapiclient.discovery import build
 
+# Add project root to path
+sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), "..")))
+
 from config.google_config import GOOGLE_TOKEN, GOOGLE_CREDENTIALS, SCOPES
 from config.joplin_config import BASE_DIR, JOPLIN_API, JOPLIN_TOKEN, JOPLIN_NOTEBOOK_ID
 from config.sheets_config import TEAM_SHEETS_CONFIG
 from joplin.utils.team_markdown_builder import build_team_summary
+
 
 def authenticate():
     creds = None
@@ -55,63 +59,23 @@ def get_status_marker(cell):
         return abs(r - target[0]) < 0.1 and abs(g - target[1]) < 0.1 and abs(b - target[2]) < 0.1
 
     if rgb_match(r, g, b, (1.0, 0.6, 0.6)):
-        return "CH"
+        return "🔴"
     elif rgb_match(r, g, b, (0.6, 0.8, 0.6)):
-        return "PO"
+        return "🟢"
     elif rgb_match(r, g, b, (0.6, 0.6, 0.8)):
-        return "TO"
+        return "🔵"
     elif rgb_match(r, g, b, (1.0, 0.8, 0.6)):
-        return "10D"
+        return "🟡"
     elif rgb_match(r, g, b, (0.85, 0.85, 0.85)):
-        return "NG"
+        return "⚪"
     else:
         return ""
 
 
-def format_summary(rows):
-    labels = [
-        "Salary for Cap",
-        "Cap Space",
-        "Luxury Tax Space",
-        "1st Apron Space",
-        "2nd Apron Space"
-    ]
-
-    markdown = "### 🧾 Cap Sheet Summary\n\n"
-    markdown += "| Category | Amount |\n|----------|--------|\n"
-
-    for i, row in enumerate(rows):
-        cells = row.get("values", [])
-        amount = cells[0].get("formattedValue", "").strip() if cells else ""
-        if not amount:
-            val = cells[0].get("effectiveValue", {}) if cells else {}
-            if "numberValue" in val:
-                amount = f"${val['numberValue']:,.0f}"
-        if amount:
-            markdown += f"| {labels[i]} | {amount} |\n"
-
-    return markdown
-
-
-def format_markdown(rows):
-    markdown = "### 👥 Player Salaries\n\n"
-    markdown += "| Player | Salary |\n|--------|--------|\n"
-    for row in rows:
-        cells = row.get("values", [])
-        if not cells:
-            continue
-        name = cells[0].get("effectiveValue", {}).get("stringValue") or cells[0].get("formattedValue", "")
-        salary_str = ""
-        if len(cells) > 1:
-            salary_cell = cells[1]
-            val = salary_cell.get("effectiveValue", {}).get("numberValue")
-            salary_str = f"${val:,.0f}" if val is not None else salary_cell.get("formattedValue", "")
-            marker = get_status_marker(salary_cell)
-            if marker:
-                salary_str = f"{marker} {salary_str}"
-        if name:
-            markdown += f"| {name} | {salary_str} |\n"
-    return markdown
+def render_template(template, placeholder_map):
+    for placeholder, value in placeholder_map.items():
+        template = template.replace(f"{{{{{placeholder}}}}}", value)
+    return template
 
 
 def check_joplin_api_available():
@@ -207,25 +171,41 @@ def main():
             sheet_data = get_sheet_data(service, sheet_id)
 
             row_data_players = []
-            row_data_summary = []
-
             if len(sheet_data) > 0 and "data" in sheet_data[0] and len(sheet_data[0]["data"]) > 0:
                 row_data_players = sheet_data[0]["data"][0].get("rowData", [])
 
-            if len(sheet_data) > 1 and "data" in sheet_data[1] and len(sheet_data[1]["data"]) > 0:
-                row_data_summary = sheet_data[1]["data"][0].get("rowData", [])
-
-            if not row_data_players or not row_data_summary:
-                print(f"🚫 Skipping {team} due to missing sheet data")
+            if not row_data_players:
+                print(f"🚫 Skipping {team} due to missing player rows")
                 continue
 
-            # Get worksheet for full-team markdown
             spreadsheet = gc.open_by_key(sheet_id)
             sheet = spreadsheet.worksheet("Roster")
 
-            markdown = build_team_summary(sheet)
-            markdown += "\n\n" + format_summary(row_data_summary)
-            markdown += "\n\n" + format_markdown(row_data_players)
+            # Load template
+            template = build_team_summary(sheet)
+
+            # Map placeholders to values
+            placeholder_map = {}
+            for i, row in enumerate(row_data_players):
+                cells = row.get("values", [])
+                if not cells:
+                    continue
+
+                name = cells[0].get("formattedValue", "").strip() if len(cells) > 0 else ""
+                salary_cell = cells[1] if len(cells) > 1 else {}
+                val = salary_cell.get("effectiveValue", {}).get("numberValue")
+                salary = f"${val:,.0f}" if val is not None else salary_cell.get("formattedValue", "").strip()
+
+                marker = get_status_marker(salary_cell)
+                if marker:
+                    salary = f"{marker} {salary}"
+
+                placeholder_map[f"player{i+1}_name"] = name or ""
+                placeholder_map[f"player{i+1}_25"] = salary or ""
+                placeholder_map[f"player{i+1}_26"] = ""  # Extend if needed
+
+            # Fill in placeholders
+            markdown = render_template(template, placeholder_map)
 
             sync_note_to_joplin(team, markdown)
 

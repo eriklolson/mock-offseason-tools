@@ -8,7 +8,7 @@ sys.path.insert(0, str(project_root))
 from config.joplin_config import JOPLIN_API, JOPLIN_TOKEN, JOPLIN_NOTEBOOK_ID
 from config.sheets_config import MD_TEMPLATE_PATH
 
-def build_team_summary():
+def build_team_summary(sheet=None):
     """
     Loads and returns the static Markdown template with placeholders
     from the template file.

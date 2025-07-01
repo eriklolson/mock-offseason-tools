@@ -8,6 +8,7 @@ TEAM_SHEETS_CONFIG = os.getenv(
     os.path.join(BASE_DIR, "config", "teamsheets.yaml")
 )
 
+MD_TEMPLATE_PATH = os.path.join(BASE_DIR, "templates", "team_sheet_template.md")
 # # Optional: default headers for HTTP requests
 # HEADERS = {"Content-Type": "application/json"}
 #

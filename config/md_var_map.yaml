@@ -16,5 +16,9 @@ exceptions:
 payroll:
   player_name: C8:C27
   player_sal_26: D8:D27
+  player_stat_26: E8:E27
   player_sal_27: H8:H27
+  player_stat_27: I8:I27
+  player_sal_28: J8:J27
+  player_stat_28: K8:K27
 
